@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:orientation="horizontal"
+              android:padding="5dip"
+              android:layout_width="fill_parent"
+              android:layout_height="wrap_content">
+<ImageView
+        android:id="@+id/type_icon"
+        android:layout_width="25sp"
+        android:layout_height="47sp"
+        android:paddingTop="7sp"
+        android:paddingRight="5sp"
+        />
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:orientation="vertical"
+              android:layout_width="fill_parent"
+              android:layout_height="wrap_content">
+
+    <!-- Item Name -->
+    <TextView
+        android:id="@+id/item_authors"
+
+        android:layout_width="wrap_content"
+        android:layout_height="15sp"
+
+        android:layout_alignParentTop="true"
+        android:layout_alignParentLeft="true"
+
+        android:textSize="12sp"
+        android:singleLine="true"
+        android:ellipsize="marquee"
+   />
+    <TextView
+        android:id="@+id/item_title"
+
+        android:layout_width="wrap_content"
+        android:layout_height="20sp"
+
+        android:layout_alignParentTop="true"
+        android:layout_alignParentLeft="true"
+
+        android:textSize="15sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="marquee"
+   />
+    <TextView
+        android:id="@+id/item_addinfo"
+
+        android:layout_width="wrap_content"
+        android:layout_height="16sp"
+
+        android:layout_alignParentTop="true"
+        android:layout_alignParentLeft="true"
+
+        android:textSize="12sp"
+        android:singleLine="true"
+        android:ellipsize="marquee"
+   />
+</LinearLayout>
+</LinearLayout>
