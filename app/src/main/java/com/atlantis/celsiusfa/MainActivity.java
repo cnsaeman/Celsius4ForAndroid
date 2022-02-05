@@ -1,5 +1,7 @@
 package com.atlantis.celsiusfa;
 
+import static android.os.Build.VERSION.SDK_INT;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -13,13 +15,13 @@ import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemSelectedListener;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Spinner;
@@ -75,13 +77,21 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         itemList.setAdapter(itemListAdapter);
         searchField = (EditText) findViewById(R.id.TFsearch);
         searchField.addTextChangedListener(this);
-
+        RSC.out("ZZZ:"+String.valueOf(itemList.getWidth()));
+        searchField.setWidth((int)(0.8*itemList.getWidth()));
 
         RSC.out(String.valueOf(librarySpinner ==null));
         RSC.out("Loading libraries");
         readInLibraries();
         librarySpinner.setAdapter(librarySpinnerAdapter);
         currentLibrary=null;
+
+        final Button button = (Button) findViewById(R.id.clear_button);
+        button.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                searchField.setText("");
+            }
+        });
     }
 
     public void showBaseFiles() {
@@ -103,7 +113,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
      * Load the libraries contained in Celsius4-folder baseFolder
      * @param baseFolder
      */
-    public void loadLibraries(String baseFolder) {
+    public void loadLibrariesFromBaseFolder(String baseFolder) {
         RSC.out("Loading Libraries from "+baseFolder);
         File[] files = (new File(baseFolder)).listFiles();
         if (files!=null) {
@@ -118,6 +128,34 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
             startupMessage.append("Folder is empty!\n");
             RSC.out("ERROR: No libraries found.");
             RSC.showInformation("No libraries found.","Error:");
+        }
+    }
+
+    public void lookThroughFolder(String folder) {
+        RSC.out("Checking folder: "+folder);
+        File directory = new File(folder);
+        File[] files = directory.listFiles();
+        boolean baseFolder=false;
+        if (files!=null) {
+            for (File file : files) {
+                RSC.out("Found file: " + file.getName());
+                if (file.getName().equals("Android")) baseFolder = true;
+            }
+            if (baseFolder) {
+                RSC.out("Base folder found: " + folder);
+                String basefolder= folder + "/Android/data/com.atlantis.celsiusfa/files";
+                RSC.out("Setting basefolder: "+basefolder);
+                if ((new File(basefolder)).exists()) {
+                    RSC.out("Found Celsius folder: " + basefolder);
+                    loadLibrariesFromBaseFolder(basefolder);
+                }
+            } else {
+                for (File file : files) {
+                    if (file.isDirectory()) {
+                        lookThroughFolder(folder + "/" + file.getName());
+                    }
+                }
+            }
         }
     }
 
@@ -143,32 +181,29 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                 Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_DENIED) {
             ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, WRITE_EXTERNAL_STORAGE);
         }
-        // Check available base folders
-        //String storageFolder=Environment.getStorageDirectory().toString();
-        //String storageFolder=getApplicationContext().getExternalFilesDir("Libraries").toString();
-        String storageFolder="/storage/3433-3534/Android/data/com.atlantis.celsiusfa/files/Libraries/";
-        RSC.out("XXX\n"+storageFolder);
-        loadLibraries(storageFolder);
-        RSC.out("DONE??");
-        /*String storageFolder=Environment.getExternalStorageDirectory().toString();
-        startupMessage.append("Looking at external storage folder: "+storageFolder+"\n");
-        File directory = new File(storageFolder);
-        File[] files = directory.listFiles();
-        boolean foundFolder=false;
-        for (File file : files) {
-            RSC.out("Found file: "+file.getName());
-            if (file.isDirectory()) {
-                RSC.out("Directory!");
-                listFolder(storageFolder+"/"+file.getName());
-                String celsiusFolder=storageFolder+"/"+file.getName()+"/Celsius4";
-                if ((new File(celsiusFolder)).exists()) {
-                    startupMessage.append("Found Celsius4 folder: "+celsiusFolder+"\n");
-                    loadLibraries(celsiusFolder);
-                }
-            } else {
-                RSC.out("Not a directory...");
+        /*if(SDK_INT >= 30) {
+            if (!Environment.isExternalStorageManager()) {
+                Snackbar.make(findViewById(android.R.id.content), "Permission needed!", Snackbar.LENGTH_INDEFINITE)
+                        .setAction("Settings", new View.OnClickListener() {
+                            @Override
+                            public void onClick(View v) {
+
+                                try {
+                                    Uri uri = Uri.parse("package:" + BuildConfig.APPLICATION_ID);
+                                    Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, uri);
+                                    startActivity(intent);
+                                } catch (Exception ex) {
+                                    Intent intent = new Intent();
+                                    intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                                    startActivity(intent);
+                                }
+                            }
+                        })
+                        .show();
             }
         }*/
+        // Check available base folders
+        lookThroughFolder("/storage");
         librarySpinnerAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, libraryList);
         librarySpinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         //RSC.showInformation(startupMessage.toString(),"Celsius4 | (w) by C. Saemann");
@@ -196,7 +231,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     }
 
     private Uri getUriFromFile(File file){
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+        if (SDK_INT < Build.VERSION_CODES.N) {
             return Uri.fromFile(file);
         }else {
             return FileProvider.getUriForFile(this, "com.atlantis.fileprovider", file);

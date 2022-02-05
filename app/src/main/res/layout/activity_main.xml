@@ -39,12 +39,28 @@
             android:textColor="@color/design_default_color_on_secondary"
             android:textSize="20sp" />
 
-        <EditText
-            android:id="@+id/TFsearch"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ems="10"
-            android:inputType="textPersonName" />
+        <LinearLayout
+            android:layout_width="fill_parent"
+            android:layout_height="57dp"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/TFsearch"
+                android:layout_width="fill_parent"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:ems="10"
+                android:inputType="textPersonName" />
+
+            <Button
+                android:id="@+id/clear_button"
+                android:layout_width="99dp"
+                android:layout_height="57dp"
+                android:layout_weight="0"
+                android:maxWidth="48dip"
+                android:minWidth="48dip"
+                android:text="Clear" />
+        </LinearLayout>
 
         <ListView
             android:id="@+id/LVResults"
