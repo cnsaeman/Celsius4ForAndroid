@@ -5,6 +5,7 @@
  */
 package celsius.data;
 
+import celsius.components.library.Library;
 import atlantis.tools.Parser;
 import celsius.tools.ToolBox;
 import java.io.ByteArrayInputStream;
@@ -171,6 +172,12 @@ public class TableRow {
         ArrayList<String> out=new ArrayList<>();
         out.addAll(properties.keySet());
         return(out);
+    }
+    
+    public void flatCopy(TableRow tr) {
+        for (String key : tr.getFields()) {
+            if (!key.equals("id")) this.put(key,tr.get(key));
+        }
     }
     
     public boolean needsSaving() {

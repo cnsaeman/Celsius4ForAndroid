@@ -7,7 +7,11 @@ package celsius.tools;
 
 import atlantis.tools.Parser;
 import celsius.Resources;
-import celsius.data.*;
+import celsius.components.bibliography.BibTeXRecord;
+import celsius.data.Item;
+import celsius.components.library.Library;
+import celsius.data.Person;
+import celsius.data.TableRow;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -25,10 +29,12 @@ public class CelsiusTemplate {
     public final SimpleDateFormat FDF;
     
     public final Resources RSC;
+    public final Library library;
 
 
-    public CelsiusTemplate (Resources rsc,String ts) {
+    public CelsiusTemplate (Resources rsc,String ts,Library lib) {
         RSC=rsc;
+        library=lib;
         FDF=new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");  
         if (ts==null) templateString="EMPTY"; else templateString=ts;
         ifs=new ArrayList<>();
@@ -65,9 +71,8 @@ public class CelsiusTemplate {
         }
         
         // setup thumbnail
-        String thumb=item.getThumbnailPath();
-        if (thumb!=null) {
-            item.put("$thumbnail",thumb);
+        if (item.hasThumbnail()) {
+            item.put("$thumbnail", item.getThumbnailPath());
         }
         
         
@@ -109,7 +114,7 @@ public class CelsiusTemplate {
                 int modifier = 0;
                 modifier=Integer.valueOf(Parser.cutFrom(key, "&"));
                 field=Parser.cutUntil(key,"&");
-                if (field.equals("authors")) {
+                if (library.isPeopleField(field)) {
                     if (modifier > 0) {
                         switch (modifier) {
                             case 1:
@@ -136,6 +141,9 @@ public class CelsiusTemplate {
             } else if (item.library.isPeopleField(key)) {
                 insert=item.getNames(field, 3);
             }
+            if (field.equals("$categories")) {
+                insert = item.getClickableCategoriesList();
+            }
             int i=out.indexOf("#"+key+"#");
             while (i>-1) {
                 String out2="";
@@ -151,6 +159,11 @@ public class CelsiusTemplate {
     public String fillIn(TableRow tableRow,Boolean fast) {
         if (!fast) tableRow.loadLevel(3);
         String  out=templateString;
+        // setup thumbnail
+        String thumb=tableRow.getThumbnailPath();
+        if (thumb!=null) {
+            tableRow.put("$thumbnail",thumb);
+        }
         for (String ift : ifs) {
             int i=out.indexOf("#if#"+ift+"#");
             while (i>-1) {

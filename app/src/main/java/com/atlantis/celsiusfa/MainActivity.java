@@ -2,12 +2,6 @@ package com.atlantis.celsiusfa;
 
 import static android.os.Build.VERSION.SDK_INT;
 
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
-//import celsius.Resources;
-
 import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -16,41 +10,75 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
+import android.text.Html;
 import android.text.TextWatcher;
+import android.view.MenuItem;
 import android.view.View;
+import android.view.Menu;
 import android.widget.AdapterView;
-import android.widget.AdapterView.OnItemSelectedListener;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import com.google.android.material.navigation.NavigationView;
+
+import androidx.annotation.RequiresApi;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
+import androidx.core.view.GravityCompat;
+import androidx.navigation.NavController;
+import androidx.navigation.Navigation;
+import androidx.navigation.ui.AppBarConfiguration;
+import androidx.navigation.ui.NavigationUI;
+import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.appcompat.app.AppCompatActivity;
+
+import com.atlantis.celsiusfa.databinding.ActivityMain2Binding;
+import com.google.android.material.tabs.TabLayout;
+
 import java.io.File;
 import java.net.URLConnection;
+import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 
 import celsius.Resources;
+import celsius.components.categories.Category;
 import celsius.data.Attachment;
 import celsius.data.Item;
-import celsius.data.Library;
+import celsius.components.library.Library;
+import celsius.data.Person;
+import celsius.gui.CustomMovementMethod;
+import celsius.tools.CelsiusTemplate;
 
-public class MainActivity extends AppCompatActivity implements AdapterView.OnItemClickListener, OnItemSelectedListener, TextWatcher {
+public class MainActivity extends AppCompatActivity  implements AdapterView.OnItemClickListener, MenuItem.OnMenuItemClickListener, TextWatcher {
+
+    private AppBarConfiguration mAppBarConfiguration;
+    private ActivityMain2Binding binding;
 
     public Resources RSC;
 
     // GUI
-    Spinner librarySpinner;
-    ArrayAdapter<String> librarySpinnerAdapter;
+    Spinner searchSpinner;
+    Menu navigation;
     TextView textView;
     EditText searchField;
     ListView itemList;
-    ItemListAdapter itemListAdapter;
+    TableRowListAdapter itemListAdapter;
+    Button clearButton;
+    TextView infoBox;
+
+    Item currentItem;
+
     ArrayList<String> libraryList;
 
     Library currentLibrary;
+
+    int currentListType;
 
     ThreadSearch threadSearch;
 
@@ -59,31 +87,60 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
     private final int READ_EXTERNAL_STORAGE=100;
     private final int WRITE_EXTERNAL_STORAGE=101;
 
+    @RequiresApi(api = Build.VERSION_CODES.R)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        binding = ActivityMain2Binding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
+
+        setSupportActionBar(binding.appBarMain2.toolbar);
+        DrawerLayout drawer = binding.drawerLayout;
+        NavigationView navigationView = binding.navView;
+        // Passing each menu ID as a set of Ids because each
+        // menu should be considered as top level destinations.
+        mAppBarConfiguration = new AppBarConfiguration.Builder(
+                R.id.nav_home)
+                .setOpenableLayout(drawer)
+                .build();
+        NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_content_main2);
+        NavigationUI.setupActionBarWithNavController(this, navController, mAppBarConfiguration);
+        NavigationUI.setupWithNavController(navigationView, navController);
+
         startupMessage=new StringBuffer();
+        currentItem=null;
+
         RSC=new Resources(this);
         RSC.out("onCreate, starting...");
-        setContentView(R.layout.activity_main);
 
         // find all objects and register listeners
-        librarySpinner = (Spinner) this.findViewById(R.id.librarySpinner);
-        librarySpinner.setOnItemSelectedListener(this);
         textView=(TextView) this.findViewById(R.id.textView);
         itemList = (ListView) findViewById(R.id.LVResults);
         itemList.setOnItemClickListener(this);
-        itemListAdapter = new ItemListAdapter(this,null);
-        itemList.setAdapter(itemListAdapter);
+
+
+        infoBox= (TextView)this.findViewById(R.id.infoBox);
+
+        setInfo(RSC.stdHTMLString);
+
+        clearButton=(Button) this.findViewById(R.id.clear_button);
+        clearButton.setEnabled(false);
+        searchSpinner=(Spinner) this.findViewById(R.id.searchSpinner);
+        searchSpinner.setEnabled(false);
+
         searchField = (EditText) findViewById(R.id.TFsearch);
         searchField.addTextChangedListener(this);
         RSC.out("ZZZ:"+String.valueOf(itemList.getWidth()));
         searchField.setWidth((int)(0.8*itemList.getWidth()));
+        searchField.setEnabled(false);
 
-        RSC.out(String.valueOf(librarySpinner ==null));
+        navigation = ((NavigationView) findViewById(R.id.nav_view)).getMenu();
+        itemListAdapter = new TableRowListAdapter(this,null);
+        itemList.setAdapter(itemListAdapter);
+
         RSC.out("Loading libraries");
         readInLibraries();
-        librarySpinner.setAdapter(librarySpinnerAdapter);
         currentLibrary=null;
 
         final Button button = (Button) findViewById(R.id.clear_button);
@@ -92,6 +149,40 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                 searchField.setText("");
             }
         });
+
+    }
+
+    public void setInfo(String info) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            infoBox.setText(Html.fromHtml(info, Html.FROM_HTML_MODE_COMPACT));
+        } else {
+            infoBox.setText(Html.fromHtml(info));
+        }
+        infoBox.setMovementMethod(new CustomMovementMethod(RSC,this));
+    }
+
+    @Override
+    public boolean onMenuItemClick(MenuItem item) {
+        if (item.getItemId() == R.id.action_about) {
+            RSC.showInformation("This is Celsius for Android, version "+RSC.VersionNumber,"About");
+            return(true);
+        }
+        return super.onContextItemSelected(item);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.main2, menu);
+        menu.getItem(0).setOnMenuItemClickListener(this);
+        return true;
+    }
+
+    @Override
+    public boolean onSupportNavigateUp() {
+        NavController navController = Navigation.findNavController(this, R.id.nav_host_fragment_content_main2);
+        return NavigationUI.navigateUp(navController, mAppBarConfiguration)
+                || super.onSupportNavigateUp();
     }
 
     public void showBaseFiles() {
@@ -115,6 +206,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
      */
     public void loadLibrariesFromBaseFolder(String baseFolder) {
         RSC.out("Loading Libraries from "+baseFolder);
+        int position=0;
         File[] files = (new File(baseFolder)).listFiles();
         if (files!=null) {
             RSC.out("Found "+String.valueOf(files.length)+" files.");
@@ -122,7 +214,21 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                 RSC.out("Found&loaded library "+f.getName());
                 startupMessage.append("Found&loaded library "+f.getName()+"\n");
                 RSC.loadLibrary(f.getPath());
+                MenuItem item=navigation.add(f.getName());
+                final int p=position;
+                item.setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
+                    @Override
+                    public boolean onMenuItemClick(MenuItem menuItem) {
+                        DrawerLayout layout = (DrawerLayout)findViewById(R.id.drawer_layout);
+                        if (layout.isDrawerOpen(GravityCompat.START)) {
+                            layout.closeDrawer(GravityCompat.START);
+                        }
+                        switchToLibrary(p);
+                        return(true);
+                    }
+                });
                 libraryList.add(f.getName());
+                position++;
             }
         } else {
             startupMessage.append("Folder is empty!\n");
@@ -150,8 +256,10 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
                     loadLibrariesFromBaseFolder(basefolder);
                 }
             } else {
+                RSC.out("Not a base folder. Recursively going through directories.");
                 for (File file : files) {
                     if (file.isDirectory()) {
+                        RSC.out("Entering: "+folder + "/" + file.getName());
                         lookThroughFolder(folder + "/" + file.getName());
                     }
                 }
@@ -204,8 +312,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         }*/
         // Check available base folders
         lookThroughFolder("/storage");
-        librarySpinnerAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, libraryList);
-        librarySpinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        if (RSC.libraries.size()==0) lookThroughFolder("/sdcard");
         //RSC.showInformation(startupMessage.toString(),"Celsius4 | (w) by C. Saemann");
     }
 
@@ -213,9 +320,10 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         if (currentLibrary==null) {
             RSC.showInformation("Current library is null","Error!");
         } else {
-            itemListAdapter.clear();
+            itemListAdapter.clear(searchSpinner.getSelectedItemPosition());
             itemList.setAdapter(itemListAdapter);
             stopSearch();
+            currentListType=mode;
             if (srch.length()>1) {
                 threadSearch = new ThreadSearch(this, currentLibrary, itemList, itemListAdapter, srch, mode);
                 threadSearch.start();
@@ -238,22 +346,18 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         }
     }
 
-    public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-        Item item = itemListAdapter.getItem(position);
+    public void viewAttachment(int position) {
+        Item item = currentItem;
         item.loadLevel(3);
-        if (item.linkedAttachments.size()>0) {
-            Attachment attachment=item.linkedAttachments.get(0);
+        if ((item.linkedAttachments.size()>0) && (item.linkedAttachments.size()>position)) {
+            Attachment attachment=item.linkedAttachments.get(position);
             String path=attachment.getFullPath();
-            // Old mime code
-            /*String mime=attachment.getS("filetype");
-            if (mime.equals("epub")) mime="epub+zip";*/
 
-            // Better, new mime code
             String mime= URLConnection.guessContentTypeFromName(path);
             RSC.out("MIME: "+mime);
             Intent viewerIntent = new Intent(Intent.ACTION_VIEW);
             viewerIntent.setDataAndType(getUriFromFile(new File(path)), mime);
-            viewerIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|
+            viewerIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION|
                     Intent.FLAG_ACTIVITY_NO_HISTORY|Intent.FLAG_ACTIVITY_CLEAR_TOP);
             PackageManager pm = getPackageManager();
             List<ResolveInfo> activities = pm.queryIntentActivities(viewerIntent, 0);
@@ -272,18 +376,63 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
         }
     }
 
-    @Override
-    public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
-        if ((librarySpinner.getSelectedItemPosition()>-1) && (librarySpinner.getSelectedItemPosition()<RSC.libraries.size())) {
-            Library library = RSC.libraries.get(librarySpinner.getSelectedItemPosition());
-            currentLibrary = library;
-            textView.setText("Current Library: " + library.name + ". Items: " + String.valueOf(library.numberOfItems) + ". People: " + String.valueOf(library.numberOfPeople));
+    public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+        if (currentListType==0) {
+            Item item = (Item)itemListAdapter.tableRows.get(position);
+            currentItem=item;
+            item.loadLevel(3);
+            CelsiusTemplate template = item.library.getHTMLTemplate(0);
+            String info = template.fillIn(item, false);
+            setInfo(info);
+        } else if (currentListType==1) {
+            Person person = (Person)itemListAdapter.tableRows.get(position);
+            RSC.out("Listing associated items for person "+person.id);
+            itemListAdapter.clear(0);
+            currentListType=0;
+            itemList.setAdapter(itemListAdapter);
+            try {
+                ResultSet RS=person.library.executeResEX("SELECT items.* FROM item_person_links INNER JOIN items ON items.id=item_person_links.item_id WHERE person_id = ("+person.id+");");
+                while (RS.next()) {
+                    Item item=new Item(person.library,RS);
+                    RSC.out("Found item: "+item.id);
+                    itemListAdapter.add(item);
+                }
+            } catch (Exception ex) {
+                RSC.outEx(ex);
+            }
+            itemList.refreshDrawableState();
+        } else if (currentListType==2) {
+            Category category = (Category)itemListAdapter.tableRows.get(position);
+            RSC.out("Listing associated items for category "+category.id);
+            itemListAdapter.clear(0);
+            currentListType=0;
+            itemList.setAdapter(itemListAdapter);
+            try {
+                ResultSet RS=category.library.executeResEX("SELECT items.* FROM item_category_links INNER JOIN items ON items.id=item_category_links.item_id WHERE category_id = ("+category.id+");");
+                while (RS.next()) {
+                    Item item=new Item(category.library,RS);
+                    RSC.out("Found item: "+item.id);
+                    itemListAdapter.add(item);
+                }
+            } catch (Exception ex) {
+                RSC.outEx(ex);
+            }
+            itemList.refreshDrawableState();
         }
     }
 
-    @Override
-    public void onNothingSelected(AdapterView<?> adapterView) {
-
+    public void switchToLibrary(int position) {
+        if ((position>-1) && (position<RSC.libraries.size())) {
+            searchField.setEnabled(true);
+            clearButton.setEnabled(true);
+            searchSpinner.setEnabled(true);
+            RSC.out("Switching to Library number:"+position);
+            Library library = RSC.libraries.get(position);
+            currentLibrary = library;
+            textView.setText("Current Library: " + library.name + ". Items: " + String.valueOf(library.numberOfItems) + ". People: " + String.valueOf(library.numberOfPeople));
+            CelsiusTemplate template = library.htmlTemplates.get("-1");
+            setInfo(template.fillIn(library.getDataHash()));
+        }
     }
 
     public void beforeTextChanged(CharSequence s, int start, int count, int after) {
@@ -292,7 +441,7 @@ public class MainActivity extends AppCompatActivity implements AdapterView.OnIte
 
     public void onTextChanged(CharSequence s, int start, int before, int count) {
         String srch = searchField.getText().toString();
-        if (srch.length() > 0) startSearch(srch, 0);
+        if (srch.length() > 0) startSearch(srch, searchSpinner.getSelectedItemPosition());
     }
 
     public void afterTextChanged(Editable s) {

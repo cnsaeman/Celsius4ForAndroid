@@ -5,7 +5,9 @@
  */
 package celsius.data;
 
-import atlantis.tools.*;
+import celsius.components.library.Library;
+import atlantis.tools.FileTools;
+import atlantis.tools.Parser;
 import celsius.tools.ToolBox;
 import java.io.File;
 import java.sql.ResultSet;
@@ -37,6 +39,14 @@ public class Attachment extends TableRow {
         super(lib,"attachments",rs,lib.attachmentPropertyKeys);
         tableHeaders=lib.attachmentPropertyKeys;
         parent=item;
+    }
+    
+    @Override
+    public void save() throws Exception {
+        if (dirtyFields.contains("path")) {
+            put("md5",FileTools.md5checksum(parent.getCompletedDir(get("path"))));
+        }
+        super.save();
     }
 
     public String getHTML(int type) {
@@ -93,19 +103,25 @@ public class Attachment extends TableRow {
         return(parent.getCompletedDir(get("path")));
     }
     
+    public String normalizeForSave(String s) {
+        s=Parser.replace(s, "\n", " ");
+        s=Parser.replace(s, "\t", " ");
+        return(s);
+    }
+    
     /**
      * Moves attachment to standard location, finding a free file name
-     * @param save
+     * @param save: performs a save on attachment
      * @return 2 : standard folder could not be created, 1 : problem copying, 0 : all good.
      */
     public int moveToStandardLocation(boolean save) {
         if (parent.library.addingMode==0) return(0);
         if (!parent.guaranteeStandardFolder()) {
-            library.RSC.out("Standard item folder could not be created.");
+            // AND library.RSC.showWarning("Standard item folder could not be created.", "Warning:");
             return (2);
         }
         String newFileName = library.getStandardFolder(this) + ToolBox.filesep + standardFileName();
-        String newFullPath = library.completeDir(newFileName, "");
+        String newFullPath = normalizeForSave(library.completeDir(newFileName, ""));
         
         // add numbers until a free filename is found
         if ((new File(newFullPath)).exists()) {
@@ -118,7 +134,7 @@ public class Attachment extends TableRow {
             }
         }
         try {
-            FileTools.moveFile(get("path"), newFullPath);
+            FileTools.moveFile(getFullPath(), newFullPath);
             put("path", library.compressFilePath(newFullPath));
             if (save) save();
         } catch (Exception ex) {

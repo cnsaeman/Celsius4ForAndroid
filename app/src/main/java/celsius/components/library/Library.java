@@ -1,25 +1,29 @@
-//
-// Celsius Library System v4
-// (w) by C. Saemann
-//
-// Library.java
-//
-// This class combines all necessary data for a library
-//
+/*
 
-package celsius.data;
+ Celsius Person Class - Atlantis Software 
+
+*/
+
+package celsius.components.library;
 
 import android.os.Build;
 
 import androidx.annotation.RequiresApi;
 
-import atlantis.tools.*;
+import celsius.components.categories.Category;
+import atlantis.tools.FileTools;
+import atlantis.tools.Parser;
 import celsius.Resources;
-/*import celsius.gui.CelsiusTable;
-import celsius.gui.SafeMessage;
-import celsius.gui.GUIToolBox;*/
+import celsius.data.Attachment;
+//import celsius.components.addItems.DoubletteResult;
+import celsius.data.Item;
+import celsius.data.Person;
+import celsius.data.TableRow;
+//import celsius.components.tableTabs.CelsiusTable;
+//import celsius.gui.SafeMessage;
+//import celsius.gui.GUIToolBox;
 import celsius.tools.*;
-import java.io.BufferedReader;
+//import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -27,9 +31,11 @@ import java.net.URLEncoder;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
+//import javax.swing.DefaultComboBoxModel;
+//import javax.swing.text.html.StyleSheet;
 import java.sql.*;
 
-public final class Library {
+public final class Library { //implements Iterable<Item> {
 
     // Library property strings
     public static final String[] LibraryFields={"name","standard-item-fields","item-table-column-fields","item-table-column-headers","item-table-column-types","item-table-column-sizes","item-autosortcolumn","person-fields","plugins-manual-items","plugins-manual-people","plugins-auto-items","plugins-import","plugins-export","filetypes","item-search-fields","person-search-fields","hide","essential-fields","item-representation","item-sort-representation","item-naming-convention","item-unique-fields","choice-fields","icon-fields","icon-dictionary","css-style","default-add-method", "item-folder"};
@@ -63,7 +69,7 @@ public final class Library {
     public CelsiusTemplate itemNamingConvention;
     public CelsiusTemplate itemFolder;
 
-    //public StructureNode structureTreeRoot;
+    // AND public StructureNode structureTreeRoot;
     public HashMap<Integer,Category> itemCategories;
 
     // Metainformation on the Library
@@ -71,6 +77,8 @@ public final class Library {
     public String baseFolder;
     public String[] itemSearchFields;
     public String[] personSearchFields;
+    public String[] itemEditFields;
+    public String[] personEditFields;
     public ArrayList<String> hideFunctionality;
     public ArrayList<String> linkedFields;
     public ArrayList<String> linkTypes;
@@ -87,6 +95,7 @@ public final class Library {
     public ArrayList<Integer> personTableColumnSizes;
     public String personTableSQLTags;
 
+    // AND public StyleSheet styleSheet;
     public LinkedHashMap<String,ArrayList<String>> usbdrives;
     public HashMap<String,String> iconDictionary;
 
@@ -103,7 +112,8 @@ public final class Library {
     public HashSet<String> personPropertyKeys;
     public final HashSet<String> attachmentPropertyKeys=new HashSet<String>((List<String>)Arrays.asList("name","filetype","path","pages","source","md5","createdTS"));     
     
-
+    // AND public final ArrayList<LibraryChangeListener> libraryChangeListeners;
+    
     public String[] shortKeys;
     
     // Size information
@@ -119,17 +129,45 @@ public final class Library {
     
     public int addingMode; // 0 : leave things where they are, 1 : move to items folder
     
+    /** 
+     * Creates a new Library 
+     * 
+     * TODO fix adjust
+     */
+    public Library(String bd,String mainfile,String nm,Resources rsc, String template) throws Exception {
+        addItemMode = 0;
+        currentStatus=0;
+        peopleFields=null;
+        RSC=rsc;
+        //celsiusBaseDir=Parser.cutUntilLast((new File(".")).getAbsolutePath(),".");
+        baseFolder=bd;
+        //if (!celsiusBaseDir.endsWith(ToolBox.filesep)) celsiusBaseDir+=ToolBox.filesep;
+        if (!baseFolder.endsWith(ToolBox.filesep)) baseFolder+=ToolBox.filesep;
+        name=nm;
+        
+        (new File(baseFolder)).mkdir();
+        (new File(baseFolder+"items")).mkdir();
+        (new File(baseFolder+"item-thumbnails")).mkdir();
+        (new File(baseFolder+"person-thumbnails")).mkdir();
+
+        getFieldsFromConfig();
+
+        // AND libraryChangeListeners=new ArrayList<>();
+        addingMode=1;
+    }
+    
     /** Loads an existing library, standard method to open Library */
     public Library(String folderName,Resources rsc) {
         addItemMode = 0;
         currentStatus=0;
         peopleFields=null;
+        // AND libraryChangeListeners=new ArrayList<>();
         RSC=rsc;
         try {
             // check that library is not open already
             for (Library lib : RSC.libraries) {
                 if (lib.name.equals(name)) {
-                    RSC.out("A library with this name is already loaded.");
+                    // AND (new SafeMessage("A library with this name is already loaded.","Library not loaded:",0)).showMsg();
                     name="??#$Library with this name is already loaded.";
                     return;
                 }
@@ -138,13 +176,16 @@ public final class Library {
             // set base folder and file 
             baseFolder=folderName;
             if (!baseFolder.endsWith(ToolBox.filesep)) baseFolder+=ToolBox.filesep;
+            
+            // ensure thumnail folders
+            if (!(new File(baseFolder+"items")).exists()) (new File(baseFolder+"items")).mkdir();
+            if (!(new File(baseFolder+"item-thumbnails")).exists()) (new File(baseFolder+"item-thumbnails")).mkdir();
+            if (!(new File(baseFolder+"person-thumbnails")).exists()) (new File(baseFolder+"person-thumbnails")).mkdir();
 
             // open main database
             mainLibraryFile=baseFolder+"CelsiusLibrary.sql";
-            String url="jdbc:sqldroid:"+mainLibraryFile;
-            /*Properties sqliteConfig = new Properties();
-            sqliteConfig.setProperty("open_mode", "1");*/
-            dbConnection = DriverManager.getConnection(url);//,sqliteConfig);
+            String url="jdbc:sqlite:"+mainLibraryFile;
+            dbConnection = DriverManager.getConnection(url);
             // check if connection locked
             try {
                 dbConnection.prepareStatement("BEGIN EXCLUSIVE").execute();
@@ -165,11 +206,9 @@ public final class Library {
             getFieldsFromConfig();
             
             // open search database
-            /*
             String surl="jdbc:sqlite:"+baseFolder+"CelsiusSearchIndex.sql";
             searchDBConnection = DriverManager.getConnection(surl);
             RSC.out("Lib>Connection established to index database "+surl);
-             */
 
             // identify links
             linkedFields=new ArrayList<>();
@@ -224,11 +263,11 @@ public final class Library {
             orderedPersonPropertyKeys.addAll(Arrays.asList(ToolBox.stringToArray(tmpKeys.toString())));
 
             if ((name.length()==0) || (baseFolder.length()==0)) {
-                RSC.out("The library file seems to be corrupt. Cancelling...");
+                // AND (new SafeMessage("The library file seems to be corrupt. Cancelling...","Warning:",0)).showMsg();
                 name="??##Library file corrupt.";
                 return;
             }
-            setStyleSheet();
+            // AND setStyleSheet();
             for (String field : Library.LibraryFields) {
                 ensure(field);
             }
@@ -242,21 +281,21 @@ public final class Library {
             }
             // read category structures
             rs=dbConnection.createStatement().executeQuery("SELECT * FROM category_tree;");
-            //structureTreeRoot=StructureNode.readInFromResultSet(this, rs);
+            // AND structureTreeRoot=StructureNode.readInFromResultSet(this, rs);
 
             // Read html templates
             htmlTemplates=new HashMap<>();
-            htmlTemplates.put("-1",new CelsiusTemplate(RSC, "<html><body><h2>Currently selected library: #library.name#</h2><hr></body></html>"));
+            htmlTemplates.put("-1",new CelsiusTemplate(RSC, "<html><body><h2>Currently selected library: #library.name#</h2><hr></body></html>",this));
             rs=dbConnection.prepareStatement("SELECT * FROM html_templates;").executeQuery();
             while (rs.next()) {
-                htmlTemplates.put(rs.getString(1), new CelsiusTemplate(RSC,rs.getString(2)));
+                htmlTemplates.put(rs.getString(1), new CelsiusTemplate(RSC,rs.getString(2),this));
             }
-            itemRepresentation=new CelsiusTemplate(RSC,config.get("item-representation"));
-            itemSortRepresentation=new CelsiusTemplate(RSC,config.get("item-sort-representation"));
-            itemNamingConvention=new CelsiusTemplate(RSC,config.get("item-naming-convention"));
+            itemRepresentation=new CelsiusTemplate(RSC,config.get("item-representation"),this);
+            itemSortRepresentation=new CelsiusTemplate(RSC,config.get("item-sort-representation"),this);
+            itemNamingConvention=new CelsiusTemplate(RSC,config.get("item-naming-convention"),this);
             String itemFolderTemplate=config.get("item-folder");
             if ((itemFolderTemplate==null) || (itemFolderTemplate.equals(""))) itemFolderTemplate="LD::documents";
-            itemFolder=new CelsiusTemplate(RSC,itemFolderTemplate);
+            itemFolder=new CelsiusTemplate(RSC,itemFolderTemplate,this);
 
             getFieldsFromConfig();
         } catch (Exception ex) {
@@ -312,6 +351,8 @@ public final class Library {
         }
         itemSearchFields=ToolBox.stringToArray(config.get("item-search-fields"));
         personSearchFields=ToolBox.stringToArray(config.get("person-search-fields"));
+        itemEditFields=ToolBox.stringToArray(config.get("item-edit-fields"));
+        personEditFields=ToolBox.stringToArray(config.get("person-edit-fields"));
         initTablePresets();
     }
 
@@ -434,13 +475,13 @@ public final class Library {
         if (linkTypes.size()==0) linkTypes.add("Links");
     }
     
-    public void setStyleSheet() {
-        /*styleSheet=new StyleSheet();
+    /* AND public void setStyleSheet() {
+        styleSheet=new StyleSheet();
         String[] rules=config.get("css-style").split("\n");
         for (String rule : rules) {
             styleSheet.addRule(rule);
-        }*/
-    }
+        }
+    }*/
 
     public void setColumnSize(int c,int w) {
         itemTableColumnSizes.set(c, w);
@@ -538,35 +579,153 @@ public final class Library {
         return(0);
     }
     
-//    public void registerItem(Item item, StructureNode node, int linktype) throws SQLException {
-//        // get id of category
-//        if (node==null) return;
-//        registerItem(item,node.category.id,linktype);
-//    }
-//
-//    public void registerItem(Item item, String catID, int linkType) throws SQLException {
-//        String[] data={item.id, catID, String.valueOf(linkType)};
-//        executeEX("INSERT OR IGNORE INTO item_category_links (item_id, category_id, link_type) VALUES (?,?,?);", data);
-//    }
-//
-//    public void unRegisterItem(Item item, int catID) throws SQLException {
-//        if (catID<1) return;
-//        String sql="DELETE FROM item_category_links WHERE item_id=? AND category_id=?;";
-//        PreparedStatement statement= dbConnection.prepareStatement(sql);
-//        statement.setInt(1,Integer.valueOf(item.id));
-//        statement.setInt(2,catID);
-//        statement.execute();
-//    }
+    /* AND public void registerItem(Item item, StructureNode node, int linktype) throws SQLException {
+        // get id of category
+        if (node==null) return;
+        registerItem(item,node.category.id,linktype);
+    }
+
+    public void registerItem(Item item, String catID, int linkType) throws SQLException {
+        String[] data={item.id, catID, String.valueOf(linkType)};
+        executeEX("INSERT OR IGNORE INTO item_category_links (item_id, category_id, link_type) VALUES (?,?,?);", data);
+    }
+    
+    public void unRegisterItem(Item item, int catID) throws SQLException {
+        if (catID<1) return;
+        String sql="DELETE FROM item_category_links WHERE item_id=? AND category_id=?;";
+        PreparedStatement statement= dbConnection.prepareStatement(sql);
+        statement.setInt(1,Integer.valueOf(item.id));
+        statement.setInt(2,catID);
+        statement.execute();
+    }*/
     
     @RequiresApi(api = Build.VERSION_CODES.N)
     public boolean isPeopleField(String key) {
-        return(Arrays.stream(peopleFields).anyMatch(key::equals));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            return(Arrays.stream(peopleFields).anyMatch(key::equals));
+        } else {
+            return(Arrays.asList(peopleFields).indexOf(key)>-1);
+        }
     }
     
     public boolean isChoiceField(String key) {
         return(choiceFields.keySet().contains(key));
     }
+    
+    /**
+     * Check for doublettes of the first attachment
+     *
+     * Return values: 100 : unique-fields not unique, 10 : exact doublette, 5: file might be doublette, 4 : apparent Doublette,  0 : no doublette
+     * 
+     */
+    /* AND public DoubletteResult isDoublette(Item item) throws IOException {
+        // Look for doublettes
+        Attachment attachment=null;
+        if (item.linkedAttachments.size()>0) attachment=item.linkedAttachments.get(0);
+        try {
+            String[] uniqueFields = configToArray("item-unique-fields");
+            String sql = "SELECT "+itemTableSQLTags+" FROM items WHERE ";
+            String cond = "";
+            ArrayList<String> params = new ArrayList<>();
+            for (String key : uniqueFields) {
+                String cV = item.get(key);
+                if ((cV != null) && (!cV.equals("<unknown>")) && (!cV.equals(""))) {
+                    cond += " OR `"+key+"`=?";
+                    params.add(cV);
+                }
+            }
+            if (!cond.equals("")) {
+                sql = sql + cond.substring(4) + " LIMIT 1;";
+                RSC.out("Lib>Doublette check: "+sql);
+                ResultSet rs=executeResEX(sql, params);
+                if (rs.next()) {
+                    Item doublette=new Item(this,rs);
+                    RSC.out("Lib>Found doublette item: " + doublette.toText(false));
+                    StringBuffer matchingFields=new StringBuffer();
+                    for (String key : uniqueFields) {
+                        if (doublette.getS(key).equals(item.getS(key))) 
+                            matchingFields.append(", ").append(key);
+                    }
+                    return (new DoubletteResult(100,doublette,matchingFields.substring(2)));
+                }
+            }
+            if (attachment==null){
+                return (new DoubletteResult(0, null,null));
+            } else {
+                String md5 = FileTools.md5checksum(item.getCompletedDir(attachment.get("path")));
+                if (md5 != null) {
+                    ResultSet rs = executeResEX("SELECT item_id from attachments LEFT JOIN item_attachment_links ON attachments.id=attachment_id WHERE md5=?;",md5);
+                    if (rs.next()) {
+                        Item doublette = new Item(this, rs.getString(1));
+                        doublette.loadLevel(1);
+                        return (new DoubletteResult(10, doublette, "MD5 checksum matching"));
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            RSC.outEx(ex);
+        }
+        return(new DoubletteResult(0,null,null));
+    }
+    
+    public void acquireCopyOfItem(Item sourceItem) {
+        String TI="LIB"+name+">";
+        String[] essentialFields=configToArray("essential-fields");
+        sourceItem.loadLinkedPeople();
+        for (int i=0; i<essentialFields.length;i++) {
+            if (!sourceItem.isPropertySet(essentialFields[i])) {
+                RSC.showWarning("The item "+sourceItem.toText(false)+"\ncould not be copied, as the field "+essentialFields[i]+",\nrequired by the library "+this.name+" is not set.", "Copying cancelled...");
+                return;
+            }
+        }
+        RSC.out(TI+"Copying item "+sourceItem.toText(false)+" from library "+sourceItem.library.name+" to "+name);
 
+        String filename="";
+        String fullfilename;
+        
+        sourceItem.loadLevel(3);
+        
+        // create new item
+        Item targetItem=new Item(this);
+        
+        // copy over all standard fields
+        targetItem.flatCopy(sourceItem);
+        
+        // copy over all people
+        for(String key : peopleFields) {
+            if (sourceItem.linkedPersons.get(key)!=null) {
+                targetItem.linkedPersons.put(key,new ArrayList<>());
+                for (Person person : sourceItem.linkedPersons.get(key)) {
+                    Person p = findOrCreatePerson(person);
+                    p.save();
+                    targetItem.linkedPersons.get(key).add(p);
+                }
+                targetItem.saveLinkedPeople(key, 0);
+            }
+        }
+
+        targetItem.save();
+        
+        // copy over all attachments
+        for (Attachment attachment : sourceItem.linkedAttachments) {
+            try {
+                String fn = attachment.get("path");
+                if (fn.startsWith("LD::items/")) {
+                    FileTools.copyFile(attachment.getFullPath(), completeDir(attachment.get("path")));
+                }
+                Attachment targetAttachment = new Attachment(this, targetItem);
+                targetAttachment.flatCopy(attachment);
+                attachment.dirtyFields.clear();
+                targetAttachment.save();
+                targetAttachment.attachToParent();
+                targetAttachment.saveAttachmentLinkToDatabase();
+            } catch (Exception ex) {
+                RSC.outEx(ex);
+            }
+        }
+
+    }*/
+    
     public String compressFilePath(String s) {
         if (s.startsWith(baseFolder)) return("LD::"+Parser.cutFrom(s,baseFolder));
         if (s.startsWith(RSC.celsiusBaseFolder)) return("BD::"+Parser.cutFrom(s,RSC.celsiusBaseFolder));
@@ -639,7 +798,7 @@ public final class Library {
         statement.executeUpdate();
     }
 
-    /*public void autoSortColumn(CelsiusTable celsiusTable) {
+    /* AND public void autoSortColumn(CelsiusTable celsiusTable) {
         int c=0;
         if (celsiusTable.getObjectType()==CelsiusTable.ITEM_TABLE) {
             if (config.get("item-autosortcolumn") != null) {
@@ -657,56 +816,44 @@ public final class Library {
         celsiusTable.sortItems(c,true);
     }*/
 
-    /**
-     * List all items in given category in celsiusTable
-     * 
-     * @param category
-     * @param celsiusTable
-     * @throws SQLException 
-     */
-    public void showItemsInCategory(Category category) throws SQLException {
-        /*if (category==null) {
+    /* AND public void showItemsInCategory(Category category,CelsiusTable celsiusTable) throws SQLException {
+        if (category==null) {
             return;
         }
         celsiusTable.setLibraryAndTableType(this,CelsiusTable.TABLETYPE_ITEMS_IN_CATEGORY);
         celsiusTable.addRows(executeResEX("SELECT "+itemTableSQLTags+" FROM item_category_links LEFT JOIN items ON item_category_links.item_id=items.id WHERE category_id=?;", category.id));
         autoSortColumn(celsiusTable);
         celsiusTable.celsiusTableModel.fireTableDataChanged();
-        celsiusTable.resizeTable(true);*/
-    }
+        celsiusTable.resizeTable(true);
+    }*/
 
-    /**
-     * List all items in given category in celsiusTable
-     * 
-     * @throws SQLException
-     */
-    public void showItemWithID(String itemID) {
-        /*celsiusTable.setLibraryAndTableType(this,CelsiusTable.TABLETYPE_ITEMS_IN_CATEGORY);
+    /* AND public void showItemWithID(String itemID,CelsiusTable celsiusTable) {
+        celsiusTable.setLibraryAndTableType(this,CelsiusTable.TABLETYPE_ITEMS_IN_CATEGORY);
         celsiusTable.addRow(new Item(this,itemID));
         celsiusTable.celsiusTableModel.fireTableDataChanged();
-        celsiusTable.resizeTable(true);*/
+        celsiusTable.resizeTable(true);
+    }*/
+    
+    public void addStandardStatistics(Person person) {
+        String result;
+        try {
+            ResultSet rs = executeResEX("SELECT COUNT(*) FROM item_person_links JOIN items ON item_person_links.item_id=items.id WHERE person_id=" + person.id + ";");
+            result=rs.getString(1);
+            if (result==null) result="Error";
+            person.put("$$currentitems", result);
+            rs = executeResEX("SELECT SUM(pages) FROM item_person_links JOIN item_attachment_links ON item_person_links.item_id=item_attachment_links.item_id JOIN attachments ON item_attachment_links.attachment_id=attachments.id WHERE person_id=" + person.id + ";");
+            result=rs.getString(1);
+            if (result==null) result="Error";
+            person.put("$$currentpages", result);
+            rs = executeResEX("SELECT SUM(pages) FROM item_person_links JOIN item_attachment_links ON item_person_links.item_id=item_attachment_links.item_id JOIN attachments ON item_attachment_links.attachment_id=attachments.id WHERE person_id=" + person.id + " AND item_attachment_links.ord=0;");
+            result=rs.getString(1);
+            if (result==null) result="Error";
+            person.put("$$currentuniquepages", result);
+        } catch (Exception e) {
+            RSC.outEx(e);
+        }
     }
     
-    public String getNumberOfItemsForPerson(TableRow tr) {
-        try {
-            ResultSet rs = executeResEX("SELECT COUNT(*) FROM item_person_links JOIN items ON item_person_links.item_id=items.id WHERE person_id=" + tr.id + ";");
-            return (rs.getString(1));
-        } catch (Exception e) {
-            RSC.outEx(e);
-        }
-        return("Error");
-    }
-
-    public String getNumberOfPagesForPerson(TableRow tr) {
-        try {
-            ResultSet rs = executeResEX("SELECT SUM(pages) FROM item_person_links JOIN item_attachment_links ON item_person_links.item_id=item_attachment_links.item_id JOIN attachments ON item_attachment_links.attachment_id=attachments.id WHERE person_id=" + tr.id + ";");
-            return (rs.getString(1));
-        } catch (Exception e) {
-            RSC.outEx(e);
-        }
-        return("Error");
-    }
-
     public int getNumberOfItemsForPeople(ArrayList<TableRow> tableRows) {
         int total=0;
         if (tableRows.size()>0) {
@@ -749,96 +896,54 @@ public final class Library {
         return(pages);        
     }
 
-    /**
-     * Add all items in category tmp to the item table IT
-     */
-    /*public void showItemsAddedAt(int i,CelsiusTable itemTable) {
-        itemTable.setLibraryAndTableType(this,CelsiusTable.TABLETYPE_ITEM_WHEN_ADDED);
-        long upper=System.currentTimeMillis()/1000;
-        long lower=0;
-        long currentday=LocalDate.now().atStartOfDay().atZone(ZoneId.systemDefault()).toEpochSecond();
-        long fullday=60*60*24;
-        switch (i) {
-            case 0 : 
-                lower=currentday;
-                break;
-            case 1 :
-                upper=currentday;
-                lower=upper-fullday;
-                break;
-            case 2 :
-                upper=currentday-fullday;
-                lower=upper-fullday;
-                break;
-            case 3 : 
-                lower=upper-7*fullday;
-                break;
-            case 4 : 
-                upper=upper-7*fullday;
-                lower=upper-7*fullday;
-                break;
-            case 5 : 
-                lower=upper-30*fullday;
-                break;
-            case 6 : 
-                upper=upper-30*fullday;
-                lower=upper-30*fullday;
-                break;
-            case 7 : 
-                lower=upper-365*fullday;
-                break;
-            case 8 : 
-                upper=upper-365*fullday;
-                lower=upper-365*fullday;
-                break;
-            default :     
-        }
-        try {
-            itemTable.addRows(executeResEX("SELECT "+itemTableSQLTags+" FROM items WHERE createdTS > "+Long.toString(lower)+" AND createdTS < "+Long.toString(upper)+";"));
-        } catch (Exception ex) {
-            RSC.outEx(ex);
-        }
-        autoSortColumn(itemTable);
-        itemTable.celsiusTableModel.fireTableDataChanged();
-        itemTable.resizeTable(true);
-    }*/
-    
+
     /**
      * Add the items with person to itemTable
      * 
-     * @param person
-     * @param itemTable 
      */
-    public void showItemsWithPersonIDs(String ids) {
-        /*itemTable.setLibraryAndTableType(this,CelsiusTable.TABLETYPE_ITEMS_OF_PERSONS);
+    /* AND public void showItemsWithPersonIDs(String ids,CelsiusTable itemTable) {
+        itemTable.setLibraryAndTableType(this,CelsiusTable.TABLETYPE_ITEMS_OF_PERSONS);
         try {
             itemTable.addRows(executeResEX("SELECT "+itemTableSQLTags+" FROM items INNER JOIN item_person_links ON item_person_links.item_id=items.id WHERE item_person_links.person_id IN ("+ids+");"));
         } catch (Exception ex) {
             RSC.outEx(ex);
         }
         autoSortColumn(itemTable);
-        itemTable.resizeTable(true);*/
-    }
+        itemTable.resizeTable(true);
+    } */
 
     /**
      * Add the items with keyword to itemTable.
      * 
-     * @param keyword
-     * @param celsiusTable 
      */
-    public void showItemsWithKeyword(String id) {
-        /*celsiusTable.setLibraryAndTableType(this,CelsiusTable.TABLETYPE_ITEM_WITH_KEYWORD);        String keys;
+    /* public void showItemsWithKeyword(String id,CelsiusTable celsiusTable) {
+        celsiusTable.setLibraryAndTableType(this,CelsiusTable.TABLETYPE_ITEM_WITH_KEYWORD);        String keys;
         try {
             celsiusTable.addRows(executeResEX("SELECT "+itemTableSQLTags+" FROM items INNER JOIN item_keyword_links ON item_keyword_links.item_id=items.id WHERE item_keyword_links.keyword_id="+id+";"));
         } catch (Exception ex) {
             RSC.outEx(ex);
         }
         autoSortColumn(celsiusTable);
-        celsiusTable.resizeTable(true);*/
+        celsiusTable.resizeTable(true);
+    }*/
+    
+    public void setHTMLTemplate(int infoMode, String template) {
+        String mode=String.valueOf(infoMode).trim();
+        if (!htmlTemplates.containsKey(mode) || (htmlTemplates.get(mode)==null) || !htmlTemplates.get(mode).equals(template)) {
+            htmlTemplates.put(mode,new CelsiusTemplate(RSC,template,this));
+            try {
+                PreparedStatement pstmt=dbConnection.prepareStatement("INSERT OR REPLACE INTO html_templates (mode,template) VALUES(?,?);");
+                pstmt.setString(1,mode);
+                pstmt.setString(2,template);
+                pstmt.execute();
+            } catch (Exception e) {
+                RSC.outEx(e);
+            }
+        }
     }
-
+    
     public CelsiusTemplate getHTMLTemplate(int infoMode) {
-        /*String mode=String.valueOf(infoMode).trim();
+        String mode=String.valueOf(infoMode).trim();
         if (htmlTemplates.containsKey(mode)) {
             return htmlTemplates.get(mode);
         } else {
@@ -846,10 +951,9 @@ public final class Library {
             /*String n="infoMode-"+mode;
             if (RSC.libraryTemplates.get(n)!=null) {
                 return(new CelsiusTemplate(RSC,RSC.libraryTemplates.get("Default").get(n)));
-            } else return(new CelsiusTemplate(RSC,"Error loading display strings from HTMLtemplates!"));
-            return(new CelsiusTemplate(RSC,"No HTMLtemplate available!"));*/
-        //}
-        return(null);
+            } else return(new CelsiusTemplate(RSC,"Error loading display strings from HTMLtemplates!"));*/
+            return(new CelsiusTemplate(RSC,"No HTMLtemplate available!",this));
+        }
     }    
 
     public String addLinks(String s) {
@@ -875,6 +979,10 @@ public final class Library {
         return (Parser.cutUntilLast(tmp, " and "));
     }
 
+
+    /*public Iterator<Item> iterator() {
+        return(new LibraryIterator(this));
+    }*/
 
     private void fillItemTableTagsWithDefaults() {
         itemTableTags.add("type");
@@ -1083,7 +1191,7 @@ public final class Library {
         return(s);
     }
 
-    /*public DefaultComboBoxModel getTypesDCBM() {
+    /* AND public DefaultComboBoxModel getTypesDCBM() {
         DefaultComboBoxModel DCBM=new DefaultComboBoxModel();
         DCBM.addElement("arbitrary");
         for (String ft : RSC.icons.Types) {
@@ -1099,47 +1207,6 @@ public final class Library {
         return (new ObjectComparatorText(t, invertSort,ty));
     }
 
-    // TODO: write: create Category and return corresponding structureNode
-    /*public StructureNode createCategory(String cat, StructureNode parent) {
-        StructureNode child=null;
-        try {
-            ResultSet rs=executeResEX("SELECT id FROM item_categories where label=? LIMIT 1;",cat);
-            if (rs.next()) {
-                int i=RSC.askQuestionYN( "Re-use existing category?", "Category name exists");
-                if (i==0) {
-                    Category category=new Category(this,rs.getString(1),cat);
-                    child=new StructureNode(this,category,0);
-                }
-            }
-            if (child==null) {
-                PreparedStatement statement=dbConnection.prepareStatement("INSERT INTO item_categories (label) VALUES (?);");
-                statement.setString(1,cat);
-                statement.execute();
-                rs = statement.getGeneratedKeys();
-                rs.next();
-                int id=rs.getInt(1);
-                Category category=new Category(this,String.valueOf(id),cat);
-                itemCategories.put(id, category);
-                //
-                child=new StructureNode(this,category,0);
-            }
-            parent.add(child);
-            PreparedStatement statement=dbConnection.prepareStatement("INSERT INTO category_tree (category,parent) VALUES (?,?);");
-            statement.setString(1,child.category.id);
-            statement.setInt(2,parent.id);
-            statement.execute();
-            rs = statement.getGeneratedKeys();
-            rs.next();
-            int cid=rs.getInt(1);
-            child.id=cid;
-            updateCategoryNodeChildren(parent);
-        } catch (Exception ex) {
-            RSC.outEx(ex);
-        }
-        return(child);
-    }*/
-    
-    
     public void executeEX(String sql) {
         RSC.out(10,"DB::"+sql);
         notifyDBInteraction();
@@ -1242,7 +1309,7 @@ public final class Library {
     }
     
     private void notifyDBInteraction() {
-        RSC.out(10,"Database read/write");
+        // AND RSC.setTempStatus("Database read/write");
     }
     
     /**
@@ -1309,6 +1376,29 @@ public final class Library {
         }
         
     }
+    
+    /* AND public void addLibraryChangeListener(LibraryChangeListener lCL) {
+        libraryChangeListeners.add(lCL);
+    }
+
+    public void removeLibraryChangeListener(LibraryChangeListener lCL) {
+        libraryChangeListeners.remove(lCL);
+    }*/
+    
+    public void itemChanged(String id) {
+    }
+
+    /* AND
+        for (LibraryChangeListener lCL : libraryChangeListeners) {
+            lCL.libraryElementChanged("item",id);
+        }
+    }
+    
+    public void personChanged(String id) {
+        for (LibraryChangeListener lCL : libraryChangeListeners) {
+            lCL.libraryElementChanged("person",id);
+        }
+    }*/
     
     public boolean doesAttachmentExist(String fn) {
         String cfn=compressFilePath(fn);
@@ -1449,7 +1539,7 @@ public final class Library {
         } else {
             for (Integer id : itemCategories.keySet()) {
                 Category c=itemCategories.get(id);
-                if (c.label.equals(value)) category=c;
+                if (c.getS("label").equals(value)) category=c;
             }
         }
         
@@ -1460,7 +1550,11 @@ public final class Library {
             } else {
                 if (key.equals("label")) {
                     category = new Category(this, null, value);
-                    category.save();
+                    try {
+                        category.save();
+                    } catch (Exception ex) {
+                        RSC.outEx(ex);
+                    }
                 }
             }
             itemCategories.put(Integer.valueOf(category.id),category);
@@ -1470,7 +1564,30 @@ public final class Library {
     }
     
     /**
-     * Find or create person by name
+     * Find or create person by from a given Person
+     * 
+     * @return
+     * @throws SQLException 
+     */
+    public Person findOrCreatePerson(Person person) {
+        Person out=null;
+        try {
+            ResultSet rs = executeResEX("SELECT * FROM persons WHERE last_name=? AND first_name=?", new String[]{person.get("last_name"), person.get("first_name")});
+            if (rs.next()) {
+                // TODO: perform identity check a bit more carefully, perhaps with unique-people-fields
+                out = new Person(this, rs);
+            } else {
+                out = new Person(this);
+                out.flatCopy(person);
+            }
+        } catch (Exception ex) {
+            RSC.outEx(ex);
+        }
+        return (out);
+    }
+
+    /**
+     * Find or create person by description string. Different properties are separated by #
      * 
      * @param description
      * @return

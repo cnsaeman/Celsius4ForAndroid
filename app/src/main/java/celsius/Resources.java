@@ -12,12 +12,9 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.os.Build;
-import android.os.Environment;
 import android.util.Log;
 
 import androidx.annotation.RequiresApi;
-
-import com.atlantis.celsiusfa.MainActivity;
 
 import atlantis.tools.TextFile;
 import atlantis.tools.Parser;
@@ -28,13 +25,10 @@ import celsius.tools.Plugins;
 import celsius.gui.SafeMessage;
 import celsius.data.BibTeXRecord;
 import celsius.gui.TabLabel;*/
-import celsius.data.Item;
 //import celsius.data.ItemSelection;
-import celsius.data.Library;
+import celsius.components.library.Library;
 //import celsius.data.LibraryTemplate;
-import celsius.data.Person;
 //import celsius.data.RecentLibraryCache;
-import celsius.data.TableRow;
 /*import celsius.gui.InformationPanel;
 import celsius.gui.MultiLineMessage;
 import celsius.tools.*;
@@ -64,7 +58,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import atlantis.tools.*;
+
 import celsius.tools.*;
 
 /*import javax.swing.BorderFactory;
@@ -90,7 +84,7 @@ import javax.swing.plaf.nimbus.NimbusLookAndFeel;*/
  */
 public class Resources {
 
-    public final String VersionNumber = "v5.0.1";
+    public final String VersionNumber = "vA4.0.1";
     public final String celsiushome = "https://github.com/cnsaeman/Celsius4";
     public String HomeDirectory;
     
@@ -100,6 +94,16 @@ public class Resources {
     public ScheduledExecutorService executorService;
 
     public final String[] HistoryFields={"Today","Yesterday","Two Days Ago","This Week","Last Week","This Month","Last Month","This Year","Last Year"};
+
+    public final String stdHTMLString="<html><body><h1>Celsius Library System 4 for Android</h1><br>" +
+                "<h2>(w) by Christian Saemann<h2><hr><br>" +
+                "<p align=\"justify\">Welcome to the Celsius Library System, the flexible database and file storage system!</p>" +
+                "<p align=\"justify\">This is the Android version of Celsius 4, a reader for Celsius 4 libraries. Please edit and create libraries using Celsius 4 for desktop computers.</p>" +
+                "<br><hr><br><a name=\"moreinfo\"><h3>More information</font><h3>" +
+                "<p align=\"justify\">Celsius's homepage is located at <a href=\"" + celsiushome + "\">" + celsiushome + "</a>, where all the releases and sources are found.</p>" +
+                "<br><hr><br><a name=\"moreinfo\"><h3>Copyright information</font></h3>" +
+                "<p align=\"justify\">Celsius is open source and released under the GNU General Public License v3.</p>" +
+                "</body></html>";
 
     public ArrayList<Library> libraries;
     public int currentLib;
@@ -126,10 +130,10 @@ public class Resources {
     public String celsiusBaseFolder;
 
     @RequiresApi(api = Build.VERSION_CODES.R)
-    public Resources(MainActivity mA) {
+    public Resources(Activity activity) {
         logLevel=-1;
 
-        mainActivity=mA;
+        mainActivity=activity;
         celsiusBaseFolder="NoBaseFolderOnTablets";
         SDF = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
         try {
